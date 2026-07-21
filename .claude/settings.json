@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"d:/Vibe-Coding/LangChainRAG项目/frontend/src/api\" \"d:/Vibe-Coding/LangChainRAG项目/frontend/src/views\" \"d:/Vibe-Coding/LangChainRAG项目/frontend/src/components\" \"d:/Vibe-Coding/LangChainRAG项目/frontend/src/router\" \"d:/Vibe-Coding/LangChainRAG项目/frontend/src/stores\" \"d:/Vibe-Coding/LangChainRAG项目/frontend/src/utils\")",
+      "Bash(rm -f \"d:/Vibe-Coding/LangChainRAG项目/frontend/src/components/HelloWorld.vue\" 2>/dev/null; ls \"d:/Vibe-Coding/LangChainRAG项目/frontend/src/\" 2>&1)",
+      "Bash(.venv/Scripts/python --version)",
+      "Bash(\"../.venv/Scripts/pip\" install *)",
+      "Bash(npx vite *)",
+      "Bash(.venv/Scripts/python -c ' *)",
+      "Bash(\"d:/Vibe-Coding/LangChainRAG项目/.venv/Scripts/pip\" index *)",
+      "Bash(\"d:/Vibe-Coding/LangChainRAG项目/.venv/Scripts/pip\" install *)",
+      "Bash(\"d:/Vibe-Coding/LangChainRAG项目/.venv/Scripts/pip\" list *)",
+      "Bash(\"d:/Vibe-Coding/LangChainRAG项目/.venv/Scripts/python\" -m pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com)",
+      "Bash(d:/Vibe-Coding/LangChainRAG项目/.venv/Scripts/python -c ' *)",
+      "Bash(\"../.venv/Scripts/python\" -m uvicorn app.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(taskkill //F //IM uvicorn.exe)",
+      "Bash(curl -s http://localhost:5175)",
+      "Bash(\"../.venv/Scripts/python\" -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000)",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(\"../.venv/Scripts/python\" -m uvicorn app.main:app --port 8000)"
+    ],
+    "additionalDirectories": [
+      "d:\\Vibe-Coding\\LangChainRAG项目\\frontend\\src",
+      "d:\\Vibe-Coding\\LangChainRAG项目\\frontend\\src\\components"
+    ]
+  }
+}
