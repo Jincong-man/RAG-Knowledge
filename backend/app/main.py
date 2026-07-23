@@ -76,12 +76,12 @@ async def _reprocess_stuck_documents():
         return
 
     logger.info(f"发现 {len(docs)} 个未完成的文档，开始重新处理...")
-    from app.services.doc_service import process_document
+    from app.routers.knowledge import _process_and_update
     import asyncio
     for doc in docs:
         file_path = str(settings.upload_dir_path / doc.filename)
         logger.info(f"重新处理文档: id={doc.id}, file={file_path}")
-        asyncio.create_task(process_document(doc.id, file_path, doc.file_type))
+        asyncio.create_task(_process_and_update(doc.id, file_path, doc.file_type))
 
 
 @asynccontextmanager

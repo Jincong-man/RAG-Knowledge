@@ -1,15 +1,15 @@
 """知识库管理路由：文档上传、列表、删除（仅管理员）"""
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, BackgroundTasks
-from sqlalchemy import select, func
+import logging
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_db, async_session_factory
 from app.models.user import User
 from app.models.document import Document, DocumentStatus
 from app.schemas.document import DocumentOut
 from app.core.deps import require_admin
 from app.config import settings
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +20,11 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".txt", ".html", ".htm", ".md", 
 
 @router.post("/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 async def upload_document(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """上传文档到知识库（仅管理员）"""
+    """上传文档到知识库（仅管理员）- 同步处理，确保状态正确更新"""
     # 检查文件扩展名
     ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in ALLOWED_EXTENSIONS:
@@ -58,12 +57,83 @@ async def upload_document(
     db.add(doc)
     await db.flush()
     await db.refresh(doc)
+    doc_id = doc.id
 
-    # 后台异步处理文档
-    from app.services.doc_service import process_document
-    background_tasks.add_task(process_document, doc.id, str(save_path), ext)
+    # get_db会自动commit，先把PROCESSING状态提交
+    # 返回后立即在独立session中处理文档
+
+    # 异步处理文档（在独立session中，避免锁冲突）
+    import asyncio
+    asyncio.create_task(_process_and_update(doc_id, str(save_path), ext))
 
     return doc
+
+
+async def _process_and_update(doc_id: int, file_path: str, file_type: str):
+    """在独立session中处理文档并更新状态"""
+    import asyncio
+    from app.services.doc_service import load_document_content, get_splitter
+    from pathlib import Path
+
+    try:
+        # 1. 解析文档
+        content = await asyncio.to_thread(load_document_content, file_path, file_type)
+        if not content.strip():
+            raise ValueError("文档内容为空")
+
+        # 2. 分块
+        splitter = get_splitter()
+        chunks = await asyncio.to_thread(splitter.split_text, content)
+        logger.info(f"文档 id={doc_id} 分块完成: {len(chunks)} 个块")
+
+        # 3. 存入Chroma
+        from langchain_core.documents import Document as LCDocument
+        lc_docs = [
+            LCDocument(
+                page_content=chunk,
+                metadata={
+                    "doc_id": doc_id,
+                    "filename": Path(file_path).name,
+                    "chunk_index": i,
+                    "file_type": file_type,
+                },
+            )
+            for i, chunk in enumerate(chunks)
+        ]
+        from app.rag.vectorstore import get_vectorstore
+        vectorstore = await get_vectorstore()
+        await asyncio.to_thread(vectorstore.add_documents, lc_docs)
+        logger.info(f"文档 id={doc_id} 向量存储完成: {len(lc_docs)} 个向量")
+
+        # 4. 更新状态（重试机制）
+        for attempt in range(5):
+            try:
+                await asyncio.sleep(1 + attempt)  # 递增等待
+                async with async_session_factory() as update_db:
+                    await update_db.execute(
+                        update(Document)
+                        .where(Document.id == doc_id)
+                        .values(status=DocumentStatus.READY, chunk_count=len(chunks))
+                    )
+                    await update_db.commit()
+                logger.info(f"文档 id={doc_id} 处理完成，状态已更新为READY")
+                return
+            except Exception as e:
+                logger.warning(f"文档 id={doc_id} 状态更新重试 {attempt+1}/5: {e}")
+        logger.error(f"文档 id={doc_id} 状态更新最终失败")
+
+    except Exception as e:
+        logger.error(f"文档 id={doc_id} 处理失败: {e}", exc_info=True)
+        try:
+            async with async_session_factory() as update_db:
+                await update_db.execute(
+                    update(Document)
+                    .where(Document.id == doc_id)
+                    .values(status=DocumentStatus.FAILED, error_message=str(e)[:500])
+                )
+                await update_db.commit()
+        except Exception:
+            pass
 
 
 @router.get("/documents", response_model=list[DocumentOut])

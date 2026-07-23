@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { knowledgeApi } from '../api/knowledge'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -8,6 +8,7 @@ const stats = ref({ total_documents: 0, ready_documents: 0, total_chunks: 0 })
 const uploading = ref(false)
 const loading = ref(false)
 const fileList = ref([])
+let pollTimer = null
 
 const allowedTypes = '.pdf,.docx,.xlsx,.txt,.html,.htm,.md,.csv'
 
@@ -17,10 +18,38 @@ const loadDocuments = async () => {
   try {
     documents.value = await knowledgeApi.getDocuments()
     stats.value = await knowledgeApi.getStats()
+    // 如果有处理中的文档，启动轮询
+    startPollingIfNeeded()
   } catch {
     ElMessage.error('加载文档列表失败')
   } finally {
     loading.value = false
+  }
+}
+
+// 轮询：有 processing 文档时每3秒刷新一次
+const startPollingIfNeeded = () => {
+  stopPolling()
+  const hasProcessing = documents.value.some(d => d.status === 'processing')
+  if (hasProcessing) {
+    pollTimer = setInterval(async () => {
+      try {
+        documents.value = await knowledgeApi.getDocuments()
+        stats.value = await knowledgeApi.getStats()
+        // 全部处理完后停止轮询
+        if (!documents.value.some(d => d.status === 'processing')) {
+          stopPolling()
+          ElMessage.success('所有文档处理完成')
+        }
+      } catch { /* ignore */ }
+    }, 5000)
+  }
+}
+
+const stopPolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
@@ -84,6 +113,7 @@ const formatSize = (bytes) => {
 }
 
 onMounted(loadDocuments)
+onBeforeUnmount(stopPolling)
 </script>
 
 <template>

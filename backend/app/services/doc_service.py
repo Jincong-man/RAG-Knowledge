@@ -2,7 +2,7 @@
 import logging
 import asyncio
 from pathlib import Path
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_factory
@@ -106,24 +106,36 @@ async def process_document(doc_id: int, file_path: str, file_type: str):
         await asyncio.to_thread(vectorstore.add_documents, lc_docs)
         logger.info(f"文档 id={doc_id} 向量存储完成: {len(lc_docs)} 个向量")
 
-        # 5. 更新数据库状态
-        async with async_session_factory() as db:
-            result = await db.execute(select(Document).where(Document.id == doc_id))
-            doc = result.scalar_one_or_none()
-            if doc:
-                doc.status = DocumentStatus.READY
-                doc.chunk_count = len(chunks)
-                db.add(doc)
-                await db.commit()
-        logger.info(f"文档 id={doc_id} 处理完成")
+        # 5. 更新数据库状态（带重试，解决SQLite锁问题）
+        for attempt in range(5):
+            try:
+                await asyncio.sleep(0.5 * (attempt + 1))  # 等待其他连接释放
+                async with async_session_factory() as db:
+                    await db.execute(
+                        update(Document)
+                        .where(Document.id == doc_id)
+                        .values(status=DocumentStatus.READY, chunk_count=len(chunks))
+                    )
+                    await db.commit()
+                logger.info(f"文档 id={doc_id} 状态已更新为READY, chunks={len(chunks)}")
+                break
+            except Exception as db_err:
+                logger.warning(f"文档 id={doc_id} 状态更新重试 {attempt+1}/5: {db_err}")
+                if attempt == 4:
+                    logger.error(f"文档 id={doc_id} 状态更新最终失败")
 
     except Exception as e:
         logger.error(f"文档 id={doc_id} 处理失败: {e}", exc_info=True)
-        async with async_session_factory() as db:
-            result = await db.execute(select(Document).where(Document.id == doc_id))
-            doc = result.scalar_one_or_none()
-            if doc:
-                doc.status = DocumentStatus.FAILED
-                doc.error_message = str(e)[:500]
-                db.add(doc)
-                await db.commit()
+        for attempt in range(3):
+            try:
+                await asyncio.sleep(1 * (attempt + 1))
+                async with async_session_factory() as db:
+                    await db.execute(
+                        update(Document)
+                        .where(Document.id == doc_id)
+                        .values(status=DocumentStatus.FAILED, error_message=str(e)[:500])
+                    )
+                    await db.commit()
+                break
+            except Exception:
+                pass
