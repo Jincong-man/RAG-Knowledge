@@ -8,21 +8,40 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 _model = None
-MODEL_LOCAL_DIR = Path(__file__).parent.parent.parent / "models" / "bge-small-zh-v1.5"
+MODEL_ID = "BAAI/bge-small-zh-v1.5"
+MODEL_ROOT = Path(__file__).parent.parent.parent / "models"
+MODEL_LOCAL_DIR = MODEL_ROOT / "bge-small-zh-v1.5"
+# ModelScope的缓存布局：<cache_dir>/models/<owner>--<name>/snapshots/<revision>
+MODELSCOPE_CACHE_PATTERN = f"models/{MODEL_ID.replace('/', '--')}/snapshots/*"
+
+
+def _find_local_model() -> Path | None:
+    """在本地查找已下载的模型目录，兼容手动解压与ModelScope缓存两种布局"""
+    candidates = [
+        MODEL_LOCAL_DIR,
+        *sorted(MODEL_ROOT.glob(MODELSCOPE_CACHE_PATTERN)),
+    ]
+    for path in candidates:
+        if (path / "config.json").exists():
+            return path
+    return None
 
 
 def _download_model():
-    """从ModelScope下载模型（如果本地不存在）"""
-    if MODEL_LOCAL_DIR.exists() and any(MODEL_LOCAL_DIR.glob("*.bin")):
-        logger.info(f"使用本地模型: {MODEL_LOCAL_DIR}")
-        return str(MODEL_LOCAL_DIR)
+    """获取模型目录：优先使用本地已下载的模型，本地没有才下载"""
+    local_model = _find_local_model()
+    if local_model:
+        logger.info(f"使用本地模型: {local_model}")
+        return str(local_model)
 
-    logger.info("从ModelScope下载bge-small-zh-v1.5模型...")
-    from modelscope import snapshot_download
-    model_dir = snapshot_download(
-        "BAAI/bge-small-zh-v1.5",
-        cache_dir=str(Path(__file__).parent.parent.parent / "models"),
-    )
+    logger.info(f"本地未找到模型，开始下载 {MODEL_ID} ...")
+    try:
+        from modelscope import snapshot_download
+        model_dir = snapshot_download(MODEL_ID, cache_dir=str(MODEL_ROOT))
+    except ImportError:
+        logger.info("未安装modelscope，改用HuggingFace下载...")
+        from huggingface_hub import snapshot_download
+        model_dir = snapshot_download(MODEL_ID, cache_dir=str(MODEL_ROOT))
     logger.info(f"模型下载完成: {model_dir}")
     return model_dir
 

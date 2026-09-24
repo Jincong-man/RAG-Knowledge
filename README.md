@@ -51,7 +51,7 @@ pip install -r requirements.txt
 # 编辑 .env 文件，填入你的 DASHSCOPE_API_KEY
 
 # 启动服务
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8002
 ```
 
 首次启动会自动：
@@ -70,7 +70,9 @@ npm install
 npm run dev
 ```
 
-访问 http://localhost:3000
+访问 http://localhost:5173
+
+前端开发服务器会把 `/api` 请求代理到后端 http://localhost:8002（见 `frontend/vite.config.js`）。
 
 ### 3. Redis (可选)
 
@@ -84,7 +86,7 @@ npm run dev
 
 ## 使用说明
 
-1. 访问 http://localhost:3000 进入登录页面
+1. 访问 http://localhost:5173 进入登录页面
 2. 管理员登录：`jincong` / `123456`
 3. 管理员可在「知识库管理」页面上传商品相关文档
 4. 普通用户注册后即可在「问答」页面提问
