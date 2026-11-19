@@ -2,6 +2,7 @@
 import json
 import logging
 import hashlib
+import time
 from typing import Optional
 
 import numpy as np
@@ -10,25 +11,36 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Redis 不可用时的重试间隔（秒），避免每个请求都卡在连接超时
+REDIS_RETRY_INTERVAL = 60
+
 
 class CacheService:
     """RAG问答缓存服务"""
 
     def __init__(self):
         self._redis = None
-        self._embeddings = None
+        self._last_attempt = 0.0
 
     async def _get_redis(self):
-        if self._redis is None:
-            try:
-                import redis.asyncio as aioredis
-                self._redis = aioredis.from_url(
-                    settings.REDIS_URL, decode_responses=True
-                )
-                await self._redis.ping()
-            except Exception as e:
-                logger.warning(f"Redis连接失败，缓存服务不可用: {e}")
-                self._redis = None
+        """获取Redis连接；不可用时按间隔重试，其余请求直接跳过缓存"""
+        if self._redis is not None:
+            return self._redis
+        if time.monotonic() - self._last_attempt < REDIS_RETRY_INTERVAL:
+            return None
+        self._last_attempt = time.monotonic()
+        try:
+            import redis.asyncio as aioredis
+            self._redis = aioredis.from_url(
+                settings.REDIS_URL,
+                decode_responses=True,
+                socket_connect_timeout=1,
+                socket_timeout=1,
+            )
+            await self._redis.ping()
+        except Exception as e:
+            logger.warning(f"Redis连接失败，缓存服务不可用: {e}")
+            self._redis = None
         return self._redis
 
     async def _get_embedding(self, text: str) -> list[float]:

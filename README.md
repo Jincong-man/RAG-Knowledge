@@ -2,6 +2,16 @@
 
 基于 **LangChain + 通义千问(Qwen)** 的企业级RAG知识库问答系统，面向电商场景，支持用户通过浏览器进行知识库管理和商品智能问答。
 
+## 在线演示
+
+| 地址 | 说明 |
+|------|------|
+| _（部署完成后填写）_ `https://<项目名>.pages.dev` | 前端站点（Cloudflare Pages） |
+| `https://<HF用户名>-rag-knowledge.hf.space/docs` | 后端 API 文档（Hugging Face Spaces） |
+
+部署步骤见 [DEPLOY.md](DEPLOY.md)。演示站启动时会自动导入 `backend/demo_data/` 下的 4 份电商示例文档，可直接体验问答与引用溯源。
+
+
 ## 技术栈
 
 | 层级 | 技术 |
@@ -57,6 +67,9 @@ uvicorn app.main:app --reload --port 8002
 首次启动会自动：
 - 创建数据库表
 - 创建管理员账号 (jincong / 123456)
+- 后台预热 embedding 模型
+
+如需本地体验与线上一致的演示数据，在 `backend/.env` 中加上 `SEED_DEMO_DATA=true`，知识库为空时会自动导入 `backend/demo_data/` 下的示例文档。
 
 ### 2. 前端启动
 

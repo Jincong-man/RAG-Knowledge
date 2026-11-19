@@ -12,8 +12,10 @@ class Settings(BaseSettings):
 
     # 大模型
     DASHSCOPE_API_KEY: str = ""
-    QWEN_MODEL: str = "qwen3.7-plus"
-    QWEN_API_BASE: str = "https://ws-3ygtulc7g8qthhqo.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    QWEN_MODEL: str = "qwen3.8-flash"
+    QWEN_API_BASE: str = "https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1"
+    # 关闭思考模式：显著降低首字延迟（qwen3 系列支持 enable_thinking 参数）
+    QWEN_ENABLE_THINKING: bool = False
 
     # Embedding & Reranker
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
@@ -48,6 +50,14 @@ class Settings(BaseSettings):
 
     # 频率限制
     RATE_LIMIT_PER_MINUTE: int = 30
+
+    # 部署 / 演示
+    ADMIN_USERNAME: str = "jincong"
+    ADMIN_PASSWORD: str = "123456"
+    # 是否在知识库为空时自动导入 demo_data 下的示例文档（公开演示站建议开启）
+    SEED_DEMO_DATA: bool = False
+    # 仅当请求携带该密钥（由 Cloudflare Pages Function 注入）时，才信任 x-real-ip 头
+    PROXY_SECRET: str = ""
 
     @property
     def upload_dir_path(self) -> Path:

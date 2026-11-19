@@ -23,29 +23,33 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def ensure_admin_user():
-    """确保管理员账号存在"""
+async def ensure_admin_user() -> int:
+    """确保管理员账号存在，返回管理员用户ID"""
     from app.database import async_session_factory
     from sqlalchemy import select
 
     async with async_session_factory() as db:
-        result = await db.execute(select(User).where(User.username == "jincong"))
+        result = await db.execute(
+            select(User).where(User.username == settings.ADMIN_USERNAME)
+        )
         admin = result.scalar_one_or_none()
         if not admin:
             admin = User(
-                username="jincong",
-                password_hash=hash_password("123456"),
+                username=settings.ADMIN_USERNAME,
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
                 role=UserRole.ADMIN,
             )
             db.add(admin)
             await db.commit()
-            logger.info("已创建管理员账号: jincong")
+            await db.refresh(admin)
+            logger.info(f"已创建管理员账号: {settings.ADMIN_USERNAME}")
         else:
-            logger.info("管理员账号已存在: jincong")
+            logger.info(f"管理员账号已存在: {settings.ADMIN_USERNAME}")
+        return admin.id
 
 
-async def _warmup_models():
-    """后台预热embedding模型并重新处理卡住的文档"""
+async def _warmup_models(admin_id: int):
+    """后台预热embedding模型、导入演示数据并重新处理卡住的文档"""
     try:
         import asyncio
         await asyncio.sleep(1)  # 等待启动完成
@@ -53,6 +57,16 @@ async def _warmup_models():
         from app.rag.embeddings import get_embedding_model
         await asyncio.to_thread(get_embedding_model)
         logger.info("embedding模型预热完成")
+
+        # 预热向量库（首次导入 Chroma/Torch 较慢，提前加载避免首个提问等待）
+        from app.rag.vectorstore import _init_vectorstore
+        await asyncio.to_thread(_init_vectorstore)
+        logger.info("向量库预热完成")
+
+        # 演示站：知识库为空时自动导入示例文档
+        if settings.SEED_DEMO_DATA:
+            from app.services.seed_service import seed_demo_documents
+            await seed_demo_documents(admin_id)
 
         # 重新处理卡在processing状态的文档
         await _reprocess_stuck_documents()
@@ -91,10 +105,10 @@ async def lifespan(app: FastAPI):
     # 初始化数据库
     await init_db()
     # 确保管理员存在
-    await ensure_admin_user()
+    admin_id = await ensure_admin_user()
     # 预热embedding模型（后台加载，不阻塞启动）
     import asyncio
-    asyncio.create_task(_warmup_models())
+    asyncio.create_task(_warmup_models(admin_id))
     logger.info("应用启动完成")
     yield
     logger.info("应用正在关闭...")

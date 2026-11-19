@@ -11,8 +11,8 @@ _collection_name = "knowledge_base"
 _vectorstore = None
 
 
-async def get_vectorstore():
-    """获取Chroma向量库实例（单例）"""
+def _init_vectorstore():
+    """同步初始化Chroma向量库（供请求和启动预热共用）"""
     global _vectorstore
     if _vectorstore is None:
         logger.info(f"正在初始化Chroma向量库: {settings.CHROMA_PERSIST_DIR}")
@@ -25,6 +25,11 @@ async def get_vectorstore():
         )
         logger.info("Chroma向量库初始化完成")
     return _vectorstore
+
+
+async def get_vectorstore():
+    """获取Chroma向量库实例（单例）"""
+    return _init_vectorstore()
 
 
 async def delete_document_chunks(doc_id: int):

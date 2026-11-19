@@ -1,0 +1,2 @@
+# SPA 前端路由：未匹配到静态文件的路径都交给 index.html（由 vue-router 处理）
+/*    /index.html   200
